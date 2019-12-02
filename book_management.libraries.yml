@@ -1,0 +1,7 @@
+book_management:
+  version: 1.x
+  js:
+    js/book_management.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupalSettings

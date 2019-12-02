@@ -1,0 +1,247 @@
+<?php
+/**
+ * @file
+ * Unique value for cck fields check module.
+ */
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\field\Entity\FieldConfig;
+
+/**
+ * [book_management_theme description]
+ * @param  [type] $existing [description]
+ * @param  [type] $type     [description]
+ * @param  [type] $theme    [description]
+ * @param  [type] $path     [description]
+ * @return [type]           [description]
+ */
+function book_management_theme($existing, $type, $theme, $path) {
+  return [
+    'main_dashboard' => [
+      'variables' => [
+        'book_count' => NULL,
+        'books' => NULL,
+        'checkout_books_count' => NULL,
+        'checkout_books' => NULL,
+        'student_count' => NULL,
+        'students' => NULL
+      ],
+    ],
+    'book_form' => [
+      'render element' => 'form',
+    ],
+  ];
+}
+
+/**
+ * [fluffiness_preprocess_page description]
+ * @param  [type] $variables [description]
+ * @return [type]            [description]
+ */
+function book_management_preprocess_page(&$variables) {
+  // Add the js to cetain pages.
+  $variables['page']['#cache']['contexts'][] = 'route';
+  $route = [
+    'view.search_records.page_1',
+    'view.individual_book_listing.page_1',
+    'view.list_of_books.page_1',
+    'book_management.check_book_status'
+  ];
+  // Only added to allowed routes.
+  if (in_array(\Drupal::routeMatch()->getRouteName(), $route)) {
+    $variables['#attached']['library'][] = 'book_management/book_management';
+  }
+}
+
+/**
+ * [book_management_form_book_form_alter description]
+ * @param [type]             $form       [description]
+ * @param FormStateInterface $form_state [description]
+ */
+function book_management_form_book_form_alter(&$form, FormStateInterface $form_state) {
+  $bundle_fields = array(
+    'book' => \Drupal::entityManager()->getFieldDefinitions('node', 'book'),
+    'book_item' => \Drupal::entityManager()->getFieldDefinitions('node', 'book_item')
+  );
+  foreach ($bundle_fields as $content_type => $bundle_field) {
+    // Get the appriopriate drupal definition for the entity type.
+    $field_definition = $content_type == 'book' ? $bundle_field['field_book_isbn'] : $bundle_field['field_book_item_id'];
+    $name = $field_definition->getFieldStorageDefinition()->getName();
+    if ($field_definition instanceof FieldConfig) {
+      $is_unique_per_lang = NULL;
+      if ((\Drupal::moduleHandler()
+          ->moduleExists('language')) && \Drupal::languageManager()
+          ->getCurrentLanguage()
+          ->getId()
+      ) {
+        $is_unique_per_lang = $field_definition->getThirdPartySetting('unique_field_ajax', 'per_lang');
+      }
+      // Depending on the content type we want to update the field
+      // with attributes used to check if the field is unique.
+      switch ($content_type) {
+        case 'book':
+          if (isset($form['isbn'])) {
+            $form['isbn']['#unique_field_ajax_settings'] = [
+              'per_lang' => $is_unique_per_lang,
+              'field_definition' => $field_definition,
+              'field_name' => $name,
+              'field_actual_name' => 'isbn',
+              'field_concate_name' => FALSE,
+              'field_type' => $content_type
+            ];
+            // Add the element unique validation.
+            $form['isbn']['#element_validate'][] = 'book_management_unique_field_ajax_validate_unique';
+            if ($field_definition->getThirdPartySetting('unique_field_ajax', 'use_ajax')) {
+              $form['isbn']['#process'] = ['_book_management_unique_field_ajax_process'];
+            }
+          }
+          break;
+
+        case 'book_item':
+          // Save each elements configs to each form element.
+          foreach ($form_state->getFormObject()->getBookItemDeltas() as $delta) {
+            if ($field_definition->getThirdPartySetting('unique_field_ajax', 'unique')) {
+              if (isset($form['book_item']['new']['container_' . $delta]['book_id_' . $delta])) {
+                $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#unique_field_ajax_settings'] = [
+                  'per_lang' => $is_unique_per_lang,
+                  'field_definition' => $field_definition,
+                  'field_name' => $name,
+                  'field_actual_name' => 'book_id_' . $delta,
+                  'field_concate_name' => 'isbn',
+                  'field_type' => $content_type
+                ];
+                // Add the element unique validation.
+                $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#element_validate'][] = 'book_management_unique_field_ajax_validate_unique';
+                if ($field_definition->getThirdPartySetting('unique_field_ajax', 'use_ajax')) {
+                  $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#process'] = ['_book_management_unique_field_ajax_process'];
+                }
+              }
+            }
+          }
+          break;
+
+        default:
+          // code...
+          break;
+      }
+    }
+  }
+}
+
+/**
+ * Attach ajax to unique field.
+ *
+ * @param $element
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ * @param $form
+ *
+ * @return mixed
+ */
+function _book_management_unique_field_ajax_process($element, FormStateInterface &$form_state, &$form) {
+  // Gather the appriopriate attributes from the field.
+  $field_name = $element['#unique_field_ajax_settings']['field_name'];
+  $field_type = $element['#unique_field_ajax_settings']['field_type'];
+  $field_actual_name = $element['#unique_field_ajax_settings']['field_actual_name'];
+  $field_concate_name = $element['#unique_field_ajax_settings']['field_concate_name'];
+  $field_definition = $element['#unique_field_ajax_settings']['field_definition'];
+  $field_label = $field_definition->label();
+  $wrapper = 'unique-' . $field_name;
+  if(!empty($form['#attached']['library']) && !in_array('unique_field_ajax/unique_event',$form['#attached']['library'])){
+    $form['#attached']['library'][] = 'unique_field_ajax/unique_event';
+  }
+  $settings = array('id' => '#'.$wrapper.' input');
+  $form['#attached']['drupalSettings']['unique_field_ajax'][] = $settings;
+  $element['#ajax'] = [
+    'callback' => '_unique_field_ajax',
+    'event' => 'finishedinput',
+    'wrapper' => $wrapper,
+    'progress' => array(
+      'type' => 'throbber',
+      'message' => t('Verifying @field_label...', array('@field_label' => $field_label)),
+    )
+  ];
+  $value = $form_state->getValue($field_actual_name);
+  // If the concate name is set then we want to format the value.
+  if ($field_concate_name) {
+    $value = \Drupal::service('book_management.services')->getBookIdFormat($form_state->getValue($field_concate_name), $value);
+  }
+  switch ($field_type) {
+    case 'book':
+      $element['#prefix'] = '<div id="' . $wrapper . '">';
+      $element['#suffix'] = '</div>';
+      $entity = $form_state->getFormObject()->getBookEntity();
+      break;
+
+    case 'book_item':
+      $element['#prefix'] = '<div id="' . $wrapper . '" class="col-md-4">';
+      $element['#suffix'] = '</div>';
+      // Get the entiyt from the delta if it isnt a new ID.
+      if (strpos($element['#name'], '_new') === FALSE) {
+        $entity = \Drupal::entityTypeManager()->getStorage('node')->load(str_replace('book_id_', '', $element['#name']));
+      }
+      else {
+        $entity = $form_state->getFormObject()->getBookItemEntity();
+      }
+      break;
+  }
+  $entity_type = $entity->getEntityTypeId();
+  // Check if the field is unique.
+  $valid = unique_field_ajax_is_unique($entity_type, '0', $field_name, $value, $entity->bundle(), $element['#unique_field_ajax_settings']['per_lang'], $entity);
+  $message = $field_definition->getThirdPartySetting('unique_field_ajax', 'message');
+  if (empty($message)) {
+    $message = t('This field has to be unique.');
+  }
+  // If its not valid then set an error.
+  if (!$valid) {
+    $element['#attributes']['class'][] = 'error';
+    $element['#attributes']['aria-invalid'] = 'true';
+    $element['#suffix'] = '<div class="error">' . $message . '</div>' . $element['#suffix'];
+  }
+  return ($element);
+}
+
+/**
+ * [book_management_unique_field_ajax_validate_unique description]
+ * @param  [type]             $element    [description]
+ * @param  FormStateInterface $form_state [description]
+ * @param  array              $form       [description]
+ * @return [type]                         [description]
+ */
+function book_management_unique_field_ajax_validate_unique($element, FormStateInterface $form_state, array $form) {
+  $field_type = $element['#unique_field_ajax_settings']['field_type'];
+  switch ($field_type) {
+    case 'book':
+      $entity = $form_state->getFormObject()->getBookEntity();
+      break;
+
+    case 'book_item':
+      // Get the entiy from the delta if it isnt a new ID.
+      if (strpos($element['#name'], '_new') === FALSE) {
+        $entity = \Drupal::entityTypeManager()->getStorage('node')->load(str_replace('book_id_', '', $element['#name']));
+      }
+      else {
+        $entity = $form_state->getFormObject()->getBookItemEntity();
+      }
+      break;
+  }
+  // Gather all the elements from the form.
+  $field_name = $element['#unique_field_ajax_settings']['field_name'];
+  $field_actual_name = $element['#unique_field_ajax_settings']['field_actual_name'];
+  $field_concate_name = $element['#unique_field_ajax_settings']['field_concate_name'];
+  $field_definition = $element['#unique_field_ajax_settings']['field_definition'];
+  $field_label = $field_definition->label();
+  $value = $form_state->getValue($field_actual_name);
+  $entity_type = $entity->getEntityTypeId();
+
+  // If the concate name is set then we want to format the value.
+  if ($field_concate_name) {
+    $value = \Drupal::service('book_management.services')->getBookIdFormat($form_state->getValue($field_concate_name), $value);
+  }
+  // If field is not unique set error.
+  $valid = unique_field_ajax_is_unique($entity_type, '0', $field_name, $value, $entity->bundle(), $element['#unique_field_ajax_settings']['per_lang'], $entity);
+  // If its not valid then set an error.
+  if (!$valid) {
+    $form_state->setErrorByName($field_actual_name, t('The field @field_label has to be unique.', array('@field_label' => $field_label)));
+    $form_state->setRebuild();
+  }
+}

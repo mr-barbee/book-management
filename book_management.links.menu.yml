@@ -1,0 +1,6 @@
+book_management.admin:
+  title: 'Book Management settings'
+  description: 'Settings for the book management system'
+  parent: system.admin
+  route_name: book_management.settings
+  weight: 100

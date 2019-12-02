@@ -1,0 +1,88 @@
+<?php
+/**
+* Implements hook_install().
+*
+* Creates some default entries on this module custom table.
+*
+* @see hook_install()
+*
+* @ingroup book_management
+*/
+function book_management_install() {
+
+}
+
+/**
+* Implements hook_schema().
+*
+* Defines the database tables used by this module.
+*
+* @see hook_schema()
+*
+* @ingroup lotus
+*/
+function book_management_schema() {
+  $schema['book_management_transaction_records'] = array(
+    'description' => 'Stores all the transaction records of all the books in the system.',
+    'fields' => array(
+      'rid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique record ID.',
+      ),
+      'student_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Students user's {users}.uid",
+      ),
+      'admin_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Admins user's {users}.uid",
+      ),
+      'book_nid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "The Book node ID's",
+      ),
+      'check_out_condition' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The Checked Out condition of the book.',
+      ),
+      'check_out_date' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'normal',
+        'description' => 'The Checked Out date for the record.',
+      ),
+      'check_in_condition' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => 'The Checked In condition of the book.',
+      ),
+      'check_in_date' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'length' => 11,
+        'description' => 'The Checked In date for the record.',
+      ),
+    ),
+    'primary key' => array('rid'),
+    // Most likely not needed for the small size of the table.
+    'indexes' => array(
+      'rid_normal_index' => array('rid'),
+    ),
+  );
+
+  return $schema;
+}

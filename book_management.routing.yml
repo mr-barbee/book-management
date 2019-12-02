@@ -1,0 +1,89 @@
+book_management.dashboard:
+  path: '/book-management'
+  defaults:
+    _controller: '\Drupal\book_management\Controller\DashboardController::mainDashboardCallback'
+    _title: 'Book Management Dashboard'
+  requirements:
+    _permission: 'access book management'
+  options:
+    no_cache: TRUE
+
+book_management.add_book:
+  path: '/book-management/add-book'
+  defaults:
+    _form: '\Drupal\book_management\Form\BookForm'
+    _title: 'Add Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.edit_book:
+  path: '/book-management/edit-book/{nid}'
+  defaults:
+    _form: '\Drupal\book_management\Form\BookForm'
+    _title: 'Edit Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.delete_book_item:
+  path: '/book-management/edit-book/{bid}/delete/{nid}'
+  defaults:
+    _form: '\Drupal\book_management\Form\DeleteBookForm'
+    _title: 'Delete Book Item'
+  requirements:
+    _permission: 'access book management'
+
+book_management.delete_book:
+  path: '/book-management/edit-book/{nid}/delete'
+  defaults:
+    _form: '\Drupal\book_management\Form\DeleteBookForm'
+    _title: 'Delete Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.check_book_status:
+  path: '/book-management/check-book-status'
+  defaults:
+    _form: '\Drupal\book_management\Form\CheckInOut\CheckBookStatusForm'
+    _title: 'Check Book Status'
+  requirements:
+    _permission: 'access book management'
+
+book_management.check_in_book:
+  path: '/book-management/check-in-book'
+  defaults:
+    _form: '\Drupal\book_management\Form\CheckInOut\CheckInBookForm'
+    _title: 'Check In Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.check_out_book:
+  path: '/book-management/check-out-book'
+  defaults:
+    _form: '\Drupal\book_management\Form\CheckInOut\CheckOutBookForm'
+    _title: 'Check Out Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.add_student:
+  path: '/book-management/add-student'
+  defaults:
+    _form: '\Drupal\book_management\Form\StudentForm'
+    _title: 'Add Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.edit_student:
+  path: '/book-management/edit-student/{uid}'
+  defaults:
+    _form: '\Drupal\book_management\Form\StudentForm'
+    _title: 'Edit Book'
+  requirements:
+    _permission: 'access book management'
+
+book_management.settings:
+  path: '/admin/tiessystems/book_management/settings'
+  defaults:
+    _form: '\Drupal\book_management\Form\BookManagementSettingsForm'
+    _title: 'Book Importer'
+  requirements:
+    _permission: 'admin book management'

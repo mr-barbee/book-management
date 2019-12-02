@@ -1,0 +1,13 @@
+access book management:
+  title: 'Book management'
+  description: 'Have access to adding and editing books and students, as well as check out books.'
+  restrict access: FALSE
+
+admin book management:
+  title: 'Administer Book management'
+  description: 'Have access to administation book settings.'
+  restrict access: FALSE
+
+# Custom permissions not needed currently.
+# permission_callbacks:
+# - Drupal\book_management\BookManagementPermissions::permissions

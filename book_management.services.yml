@@ -1,0 +1,4 @@
+services:
+    book_management.services:
+        class: Drupal\book_management\Config\Services
+        arguments: ['@current_user', '@database']
