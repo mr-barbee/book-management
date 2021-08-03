@@ -95,15 +95,20 @@ class Services {
    * @return [type]       [description]
    */
   public function getBookByIsbn(string $isbn) {
-    // Load the book based on the Book ID
-    $nodes = \Drupal::entityTypeManager()
-      ->getStorage('node')
-      ->loadByProperties(['field_book_isbn' => $isbn]);
-    // Make sure that node exists first.
-    if ($node = reset($nodes)) {
-      return $node;
+    try {
+      // Load the book based on the Book ID
+      $nodes = \Drupal::entityTypeManager()
+        ->getStorage('node')
+        ->loadByProperties(['field_book_isbn' => $isbn]);
+      // Make sure that node exists first.
+      if ($node = reset($nodes)) {
+        return $node;
+      }
+      return FALSE;
+    } catch (\Exception $e) {
+      \Drupal::logger('book_management')->error($e->getMessage());
+      return FALSE;
     }
-    return FALSE;
   }
 
   /**
@@ -239,6 +244,17 @@ class Services {
       \Drupal::logger('book_management')->error($e->getMessage());
     }
     return $records;
+  }
+
+  /**
+   * Retrieve the list of book types as
+   * is its in the CMS.
+   */
+  public function getBookTypes() {
+    return array(
+      '' => '- Select Type -',
+      'resource' => 'Resource',
+    );
   }
 
   /**

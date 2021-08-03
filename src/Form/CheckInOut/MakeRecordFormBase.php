@@ -10,7 +10,7 @@ namespace Drupal\book_management\Form\CheckInOut;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
-use Drupal\user\PrivateTempStoreFactory;
+use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Database\Connection;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -56,7 +56,7 @@ abstract class MakeRecordFormBase extends FormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('user.private_tempstore'),
+      $container->get('tempstore.private'),
       $container->get('current_user'),
       $container->get('database')
     );
@@ -119,11 +119,11 @@ abstract class MakeRecordFormBase extends FormBase {
       $book_item_entity->save();
 
       $this->deleteStore();
-      drupal_set_message($this->t('The book was checked successfully.'));
+      \Drupal::messenger()->addStatus($this->t('The book was checked successfully.'));
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to save the record!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to save the record!\n"));
     }
   }
 

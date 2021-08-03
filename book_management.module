@@ -45,7 +45,8 @@ function book_management_preprocess_page(&$variables) {
     'view.search_records.page_1',
     'view.individual_book_listing.page_1',
     'view.list_of_books.page_1',
-    'book_management.check_book_status'
+    'book_management.check_book_status',
+    'view.list_of_students.all_students'
   ];
   // Only added to allowed routes.
   if (in_array(\Drupal::routeMatch()->getRouteName(), $route)) {
@@ -60,8 +61,8 @@ function book_management_preprocess_page(&$variables) {
  */
 function book_management_form_book_form_alter(&$form, FormStateInterface $form_state) {
   $bundle_fields = array(
-    'book' => \Drupal::entityManager()->getFieldDefinitions('node', 'book'),
-    'book_item' => \Drupal::entityManager()->getFieldDefinitions('node', 'book_item')
+    'book' => \Drupal::service('entity_field.manager')->getFieldDefinitions('node', 'book'),
+    'book_item' => \Drupal::service('entity_field.manager')->getFieldDefinitions('node', 'book_item')
   );
   foreach ($bundle_fields as $content_type => $bundle_field) {
     // Get the appriopriate drupal definition for the entity type.
@@ -244,4 +245,14 @@ function book_management_unique_field_ajax_validate_unique($element, FormStateIn
     $form_state->setErrorByName($field_actual_name, t('The field @field_label has to be unique.', array('@field_label' => $field_label)));
     $form_state->setRebuild();
   }
+}
+
+/**
+ * [MYMODULE_ajax_render_alter description]
+ * @param array $data [description]
+ */
+function book_management_ajax_render_alter(array &$data) {
+  $data[] = [
+    'command' => 'reinstantiateBootstrapSelect'
+  ];
 }

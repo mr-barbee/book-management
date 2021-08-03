@@ -57,17 +57,23 @@ class CheckBookStatusForm extends MakeRecordFormBase {
       if ($node = reset($nodes)) {
         // Set the node id to the form store object.
         $this->store->set('node_id', $node->id());
+        // Gather the book entity from the book item.
+        $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($node->get('field_book')->getString());
         // Make sure the book is checked in first.
         if ($node->get('field_book_item_active_record')->getString()) {
-          // Go to the checkout page form.
-          $form_state->setRedirectUrl(Url::fromRoute('book_management.check_in_book'));
+          // Make sure the book is not a consumable.
+          if (!$book_entity->get('field_book_consumable')->getValue()[0]['value']) {
+            // Go to the checkout page form.
+            $form_state->setRedirectUrl(Url::fromRoute('book_management.check_in_book'));
+          }
+          else {
+            \Drupal::messenger()->addError(t("The Book ID @book is a consumable book! You cannot check this back in!\n", array('@book' => $form_state->getValue('book_id'))));
+          }
         }
         else {
-          // Gather the book entity from the book item.
-          $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($node->get('field_book')->getString());
           // If the book is depreciated dont allow them to check it out.
           if ($book_entity->get('field_book_depreciated')->getValue()[0]['value']) {
-            drupal_set_message(t("This book @book is depreciated you can not check it out!\n", array('@book' => $form_state->getValue('book_id'))), 'error');
+            \Drupal::messenger()->addError(t("This book @book is depreciated you can not check it out!\n", array('@book' => $form_state->getValue('book_id'))),);
           }
           else {
             // otherwise check in the book.
@@ -76,12 +82,12 @@ class CheckBookStatusForm extends MakeRecordFormBase {
         }
       }
       else {
-        drupal_set_message(t("The Book ID @book is not in the system!\n", array('@book' => $form_state->getValue('book_id'))), 'error');
+        \Drupal::messenger()->addError(t("The Book ID @book is not in the system!\n", array('@book' => $form_state->getValue('book_id'))),);
       }
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to retrieve the Book!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to retrieve the Book!\n"));
     }
   }
 }

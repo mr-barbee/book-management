@@ -75,7 +75,7 @@ class BookManagementSettingsForm extends ConfigFormBase {
       '#required' => TRUE,
       '#upload_validators' => array(
         'file_validate_extensions' => array('csv'),
-        'file_validate_size' => array(25600000),
+        'file_validate_size' => array(10485760),
       ),
     );
     $form = parent::buildForm($form, $form_state);
@@ -152,6 +152,10 @@ class BookManagementSettingsForm extends ConfigFormBase {
             $book_entity->set('field_book_subject', $subject);
             $book_entity->set('field_book_grade', $grade);
             $book_entity->set('field_book_volume', $volume);
+            // @TODO Add this to the book import.
+            $book_entity->set('field_book_consumable', FALSE);
+            // @TODO Add this to the book import.
+            $book_entity->set('field_book_type', 'resource');
             $book_entity->set('field_book_depreciated', FALSE);
             $book_entity->status = 1;
             $book_entity->save();
@@ -188,13 +192,13 @@ class BookManagementSettingsForm extends ConfigFormBase {
       // We want to delete the file when we are finsihed.
       file_delete($form_state->getValue('book_importer')[0]);
       // Save the form.
-      drupal_set_message(t("The books were successfully imported to the system. Success: @success - Failed: @failed - Skipped: @skipped" , array('@success' => $count['success'], '@failed' => $count['failed'], '@skipped' => $count['skipped'])));
+      \Drupal::messenger()->addStatus(t("The books were successfully imported to the system. Success: @success - Failed: @failed - Skipped: @skipped" , array('@success' => $count['success'], '@failed' => $count['failed'], '@skipped' => $count['skipped'])));
     }
     catch (\Exception $e) {
       // clean up the file if error was found.
       file_delete($form_state->getValue('book_importer')[0]);
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to import the csv file! Error: @error\n", array('@error' => $e->getMessage())), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to import the csv file! Error: @error\n", array('@error' => $e->getMessage())));
     }
   }
 }

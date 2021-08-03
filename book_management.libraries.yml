@@ -3,5 +3,5 @@ book_management:
   js:
     js/book_management.js: {}
   dependencies:
-    - core/jquery
+    - core/drupal.ajax
     - core/drupalSettings

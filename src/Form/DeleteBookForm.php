@@ -61,7 +61,7 @@ class DeleteBookForm extends FormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to load the Book!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to load the Book!\n"));
     }
 
     $form['actions']['#type'] = 'actions';
@@ -127,7 +127,7 @@ class DeleteBookForm extends FormBase {
       // Delete the entity node.
       $node = $node_storage->load($nid);
       $node->delete();
-      drupal_set_message(t("Book @id deleted!\n", array('@id' => $entity->get('title')->getString())));
+      \Drupal::messenger()->addStatus(t("Book @id deleted!\n", array('@id' => $entity->get('title')->getString())));
       if (!empty($this->bid)) {
         $form_state->setRedirectUrl(Url::fromRoute('book_management.edit_book', ['nid' => $this->bid]));
       }
@@ -137,7 +137,7 @@ class DeleteBookForm extends FormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to delete the Book!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to delete the Book!\n"));
     }
   }
 }

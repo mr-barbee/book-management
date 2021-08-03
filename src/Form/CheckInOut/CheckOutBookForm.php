@@ -8,6 +8,7 @@
 namespace Drupal\book_management\Form\CheckInOut;
 
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Url;
 
 class CheckOutBookForm extends MakeRecordFormBase {
@@ -51,18 +52,18 @@ class CheckOutBookForm extends MakeRecordFormBase {
 
       $form['condition'] = array (
        '#type' => 'select',
-       '#title' => t('Condition'),
+       '#title' => $this->t('Condition'),
        '#options' => $service->getConditions(),
        '#required' => TRUE,
         '#default_value' => $this->book_item_entity->get('field_book_item_condition')->getString(),
       );
 
-      $form['student'] = array (
-        '#type' => 'select',
-        '#title' => t('Student'),
-        '#options' => $service->getListOfStudentsNames(),
-        '#required' => TRUE,
-      );
+      $form['student'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Student'),
+        '#autocomplete_route_name' => 'book_management.autocomplete.students',
+        '#required' => TRUE
+      ];
 
       $form['warning'] = array(
        '#markup' => '<div><strong>' . $this->t('Are you sure you want to checkout this book!') . '</strong></div>',
@@ -70,7 +71,7 @@ class CheckOutBookForm extends MakeRecordFormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to load the Book!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to load the Book!\n"));
     }
 
     $form['actions']['previous'] = array(
@@ -93,6 +94,9 @@ class CheckOutBookForm extends MakeRecordFormBase {
     if (empty($form_state->getValue('student'))) {
       $form_state->setErrorByName('student', $this->t('This Field is Required.'));
     }
+    else if (empty(EntityAutocomplete::extractEntityIdFromAutocompleteInput($form_state->getValue('student')))) {
+      $form_state->setErrorByName('student', $this->t('This Field student name is invalid.'));
+    }
   }
 
   /**
@@ -101,17 +105,18 @@ class CheckOutBookForm extends MakeRecordFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     // Check to make sure the book is not depreciated.
     $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($this->book_item_entity->field_book->target_id);
-     if ($book_entity->get('field_book_depreciated')->getString() == FALSE) {
-       $this->store->set('student', $form_state->getValue('student'));
-       $this->store->set('condition', $form_state->getValue('condition'));
-       $this->store->set('active_record', 0);
-       // Save the data
-       parent::saveData();
-       $form_state->setRedirectUrl(Url::fromRoute('book_management.check_book_status'));
-     }
-     else {
-       drupal_set_message(t("This book is currently depreciated and cannot be checked out!\n"), 'error');
-     }
-
+    if ($book_entity->get('field_book_depreciated')->getString() == FALSE) {
+       // Extracts the entity ID from the autocompletion result.
+      $student = EntityAutocomplete::extractEntityIdFromAutocompleteInput($form_state->getValue('student'));
+      $this->store->set('student', $student);
+      $this->store->set('condition', $form_state->getValue('condition'));
+      $this->store->set('active_record', 0);
+      // Save the data
+      parent::saveData();
+      $form_state->setRedirectUrl(Url::fromRoute('book_management.check_book_status'));
+    }
+    else {
+      \Drupal::messenger()->addError(t("This book is currently depreciated and cannot be checked out!\n"));
+    }
   }
 }

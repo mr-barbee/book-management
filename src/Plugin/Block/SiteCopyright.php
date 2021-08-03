@@ -22,7 +22,7 @@ class SiteCopyright extends BlockBase {
     // Load the site name out of configuration.
     $config = \Drupal::config('system.site');
     return array(
-      '#markup' => $this->t('<h5>© ' . date('Y') .' ' . $config->get('name') . '. All rights reserved.</h5>'),
+      '#markup' => $this->t('<h5>' . $config->get('name') . '</h5>'),
     );
   }
 

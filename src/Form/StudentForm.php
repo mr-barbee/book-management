@@ -35,7 +35,7 @@ class StudentForm extends FormBase {
     try {
       $active_records = array();
       if (!empty($uid)) {
-        $student = user_load($uid);
+        $student = User::load($uid);
         if (!empty($student)) {
           $this->student = $student;
           $active_records = $this->service->getStudentTransactionRecords($uid, TRUE);
@@ -83,7 +83,7 @@ class StudentForm extends FormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to load the User!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to load the User!\n"));
     }
 
     $form['actions']['#type'] = 'actions';
@@ -141,16 +141,16 @@ class StudentForm extends FormBase {
       $student->set('field_student_grade', $values['grade']);
       // Save user
       if ($student->save()) {
-        drupal_set_message(t("Ther Student saved successfully!\n"));
+        \Drupal::messenger()->addStatus(t("Ther Student saved successfully!\n"));
         $form_state->setRedirectUrl(Url::fromRoute('view.list_of_students.all_students'));
       }
       else {
-        drupal_set_message(t("There was an error while trying to save the User!\n"), 'error');
+        \Drupal::messenger()->addError(t("There was an error while trying to save the User!\n"));
       }
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to save the User!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to save the User!\n"));
     }
   }
 }

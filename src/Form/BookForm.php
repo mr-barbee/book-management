@@ -97,9 +97,32 @@ class BookForm extends FormBase {
           }
         }
       }
+      $image = '';
+      // We want to add the default image to the form if it is set.
+      if ($photo = !empty($this->book_entity->get('field_book_image')->getValue()) ? $this->book_entity->get('field_book_image')->getValue()[0] : FALSE) {
+        $file = \Drupal\file\Entity\File::load($photo['target_id']);
+        $url = \Drupal\image\Entity\ImageStyle::load('medium')->buildUrl($file->getFileUri());
+        $image = '<img src="' . $url . '" />';
+      }
+      $form['image_markup'] = [
+        '#markup' => '<div id="bookManagedFileImage">' . $image . '</div>',
+      ];
       // Gather the list of form fields and
       // setting the default value based on
       // node data.
+      $form['image'] = array(
+        '#type' => 'book_managed_file',
+        '#upload_location' => 'public://book-images',
+        '#multiple' => FALSE,
+        '#description' => t('Allowed extensions: <em>png jpg jpeg</em>'),
+        '#upload_validators' => [
+          'file_validate_is_image' => [],
+          'file_validate_extensions' => ['png jpg jpeg'],
+          'file_validate_size' => [10485760]
+        ],
+        '#title' => t('Upload a Book Image'),
+        '#default_value' => ['fid' => $photo ? $photo['target_id'] : '']
+      );
       $form['title'] = array(
         '#type' => 'textfield',
         '#title' => t('Title:'),
@@ -130,10 +153,22 @@ class BookForm extends FormBase {
         '#title' => t('Volume:'),
         '#default_value' => $this->book_entity->get('field_book_volume')->getString(),
       );
+      $form['type'] = array (
+        '#type' => 'select',
+        '#title' => t('Type'),
+        '#options' => $this->service->getBookTypes(),
+        '#required' => TRUE,
+        '#default_value' => $this->book_entity->get('field_book_type')->getString(),
+      );
       $form['depreciated'] = array (
         '#type' => 'checkbox',
-        '#title' => ('Book is depreciated.'),
+        '#title' => ('Book is depreciated?'),
         '#default_value' => $this->book_entity->get('field_book_depreciated')->getString(),
+      );
+      $form['consumable'] = array (
+        '#type' => 'checkbox',
+        '#title' => ('Consumable Book?'),
+        '#default_value' => $this->book_entity->get('field_book_consumable')->getString(),
       );
 
       $form['book_item']['new'] = array(
@@ -256,6 +291,13 @@ class BookForm extends FormBase {
        '#submit' => array('::CancelEditBook'),
       );
 
+      $form['actions']['export_books'] = array(
+       '#type' => 'submit',
+       '#value' => $this->t('Export Books'),
+       '#limit_validation_errors' => array(),
+       '#submit' => array('::ExportBooks')
+      );
+
       if ($allow_deletion && $this->getBookEntity()->id() !== NULL) {
         $form['actions']['delete_book'] = array (
          '#type' => 'link',
@@ -266,7 +308,7 @@ class BookForm extends FormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to load the Book!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to load the Book!\n"));
     }
 
     /**
@@ -282,6 +324,55 @@ class BookForm extends FormBase {
    */
   public function BookFormAjaxCallback($form, $form_state) {
     return $form['book_item']['new'];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function ExportBooks(array &$form, FormStateInterface $form_state) {
+    try {
+      // Get the book entity.
+      $book_node = $this->getBookEntity();
+      $isbn = $book_node->get('field_book_isbn')->getValue()[0]['value'];
+      $file_uri = 'public://book_importer/'. $book_node->id() . '_books.csv';
+      //instead of writing down to a file we write to the output stream
+      $fh = fopen($file_uri, 'w');
+      // Make the CSV file headers.
+      fputcsv($fh, [t('Book ID'), t('ISBN'), t('Condition'), t('Active Record')]);
+      // Garher all book items and generate CSV.
+      foreach ($book_node->get('field_book_items')->getValue() as $key => $book_item) {
+        // Get the Book Item ID.
+        $book_item = \Drupal::entityTypeManager()->getStorage('node')->load($book_item['target_id']);
+        fputcsv($fh, [
+          $book_item->get('field_book_item_id')->getValue()[0]['value'],
+          $isbn,
+          $book_item->get('field_book_item_condition')->getValue()[0]['value'],
+          $book_item->get('field_book_item_active_record')->getValue()[0]['value']
+        ]);
+      }
+      //close the stream
+      fclose($fh);
+      // Generate the CSV file and download it to the client computer.
+      $content = file_get_contents(\Drupal::service('file_system')->realpath($file_uri));
+      $file_size = strlen($content);
+      $file_name = $book_node->get('title')->getString();
+      header('Content-Description: File Transfer');
+      header('Content-Type: text/csv; charset=utf-8');
+      header('Content-Disposition: attachment; filename="' . $file_name . ' Books.csv"');
+      header('Expires: 0');
+      header('Cache-Control: must-revalidate');
+      header('Pragma: public');
+      header('Content-Length: ' . $file_size);
+      flush();
+      // dowload the file.
+      echo($content);
+      // after download we
+      // want to delete the file.
+      unlink($file_uri);
+    } catch (\Exception $e) {
+      \Drupal::logger('book_management')->error($e->getMessage());
+      \Drupal::messenger()->addError(t("There was an error trying to export the books!\n"));
+    }
   }
 
   /**
@@ -334,6 +425,9 @@ class BookForm extends FormBase {
     if (empty($form_state->getValue('grade'))) {
       $form_state->setErrorByName('grade', $this->t('This Field is Required.'));
     }
+    if (empty($form_state->getValue('type'))) {
+      $form_state->setErrorByName('type', $this->t('This Field is Required.'));
+    }
     foreach ($this->book_item_deltas as $delta) {
       // Check all of the deltas and sort out all
       // off the new deltas created and make sure the book id
@@ -360,11 +454,18 @@ class BookForm extends FormBase {
       // the form state values.
       $book_node = $this->getBookEntity();
       $book_node->set('title', $values['title']);
+      $image = !empty($values['image']) ? [
+        'target_id' => $values['image'][0],
+        'alt' => $this->t('Book photo'),
+      ] : [];
+      $book_node->set('field_book_image', $image);
       $book_node->set('field_book_isbn', $values['isbn']);
       $book_node->set('field_book_subject', $values['subject']);
       $book_node->set('field_book_grade', $values['grade']);
       $book_node->set('field_book_volume', $values['volume']);
+      $book_node->set('field_book_type', $values['type']);
       $book_node->set('field_book_depreciated', $values['depreciated']);
+      $book_node->set('field_book_consumable', $values['consumable']);
       $book_node->status = 1;
       $book_node->save();
       // Loop through all of the book item deltas.
@@ -399,12 +500,12 @@ class BookForm extends FormBase {
       $book_node->save();
       // Link to the edit book page.
       $book_link = Link::fromTextAndUrl(t($values['title']), Url::fromUserInput('/book-management/edit-book/' . $book_node->id()))->toString();
-      drupal_set_message(t("Book @link saved!\n", array('@link' => $book_link)));
+      \Drupal::messenger()->addStatus(t("Book @link saved!\n", array('@link' => $book_link)));
       $form_state->setRedirectUrl(Url::fromRoute('view.list_of_books.page_1'));
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error with the update!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error with the update!\n"));
     }
 
   }

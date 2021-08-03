@@ -1,0 +1,65 @@
+<h4>Total Books: {{ book_count }}</h4>
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">Title</th>
+      <th scope="col">ISBN</th>
+      <th scope="col">Subject</th>
+      <th scope="col">Grade</th>
+      <th scope="col">Depreciated</th>
+      <th scope="col">Book Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for key, book in books %}
+      <tr>
+        <td scope="row">{{ book.title }}</td>
+        <td>{{ book.isbn }}</td>
+        <td>{{ book.subject }}</td>
+        <td>{{ book.grade }}</td>
+        <td>{{ book.depreciated }}</td>
+        <td>{{ book.book_count }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h4>Total Active Records: {{ checkout_books_count }}</h4>
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">Teacher</th>
+      <th scope="col">Student</th>
+      <th scope="col">Book</th>
+      <th scope="col">Checked Out</th>
+      <th scope="col">Condition</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for key, checkout_book in checkout_books %}
+      <tr>
+        <td scope="row">{{ checkout_book.teacher }}</td>
+        <td>{{ checkout_book.student }}</td>
+        <td>{{ checkout_book.book }}</td>
+        <td>{{ checkout_book.check_out_date }}</td>
+        <td>{{ checkout_book.check_out_condition }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h4>Total Students: {{ student_count }}</h4>
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">Name</th>
+      <th scope="col">Grade</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for key, student in students %}
+      <tr>
+        <td scope="row">{{ student.name }}</td>
+        <td>{{ student.grade }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

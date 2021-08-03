@@ -87,3 +87,10 @@ book_management.settings:
     _title: 'Book Importer'
   requirements:
     _permission: 'admin book management'
+book_management.autocomplete.students:
+  path: '/admin/book_management/autocomplete/students'
+  defaults:
+    _controller: '\Drupal\book_management\Controller\StudentAutoCompleteController::handleAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access book management'

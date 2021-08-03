@@ -2,8 +2,9 @@ name: TIES Book Management
 description: A book management system that allows to manage (Check In/Out) books.
 package: TIES
 type: module
-version: 1.0
+version: 2.0
 core: 8.x
+core_version_requirement: ^8 || ^9
 dependencies:
   - drupal:link
   - drupal:views

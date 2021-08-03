@@ -9,6 +9,7 @@ namespace Drupal\book_management\Form\CheckInOut;
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\user\Entity\User;
 
 class CheckInBookForm extends MakeRecordFormBase {
 
@@ -37,7 +38,7 @@ class CheckInBookForm extends MakeRecordFormBase {
       $rid = $this->book_item_entity->get('field_book_item_active_record')->getString();
       $records = $service->getTransactionRecordById($rid);
       // Load the student from the CMS.
-      $student = user_load($records[$rid]['student']);
+      $student = User::load($records[$rid]['student']);
       // Gather the book entity from the book item.
       $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($this->book_item_entity->get('field_book')->getString());
 
@@ -71,7 +72,7 @@ class CheckInBookForm extends MakeRecordFormBase {
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());
-      drupal_set_message(t("There was an error while trying to load the Book or record!\n"), 'error');
+      \Drupal::messenger()->addError(t("There was an error while trying to load the Book or record!\n"));
     }
 
     $form['actions']['previous'] = array(

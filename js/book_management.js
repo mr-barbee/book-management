@@ -1,4 +1,4 @@
-(function ($){
+(function ($, Drupal){
   $(document).on('keyup', 'input[id^=edit-book-id]', function () {
     // format the value for the book ID.
     var val = this.value.replace(/\D/g, '');
@@ -19,4 +19,12 @@
       this.value = this.value.replace(/\D/g, '');
     }
   });
-})(jQuery);
+
+  /**
+   * Initiates the js libraries
+   */
+  Drupal.AjaxCommands.prototype.reinstantiateBootstrapSelect = function(ajax, response, status) {
+    // instatiate the selectpicker after ajax
+    if (document.getElementsByClassName('selectpicker')) { $('.selectpicker').selectpicker(); }
+  }
+})(jQuery, Drupal);
