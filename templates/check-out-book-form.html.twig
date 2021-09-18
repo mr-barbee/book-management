@@ -1,0 +1,35 @@
+{{ form.form_build_id }}
+{{ form.form_token }}
+{{ form.form_id }}
+
+{{ form.book_id }}
+{{ form.title }}
+{{ form.volume }}
+{{ form.condition }}
+{{ form.student }}
+
+{% if form.old_note %}
+  <div class="accordion" id="accordionExample">
+    <div class="card">
+      <div class="card-header" id="headingTwo">
+        <h2 class="mb-0">
+          <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+            <h4>Previous Notes:</h4>
+          </button>
+        </h2>
+      </div>
+      <div id="collapseTwo" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionExample">
+        <div class="card-body">
+          {{ include('book-item-notes-table.html.twig', {book_item_notes: form.old_note}) }}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{{ form.note }}
+{{ form.warning }}
+<div>
+  {{ form.actions.submit }}
+  {{ form.actions.previous }}
+</div>

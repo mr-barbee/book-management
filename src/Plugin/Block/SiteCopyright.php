@@ -21,9 +21,9 @@ class SiteCopyright extends BlockBase {
   public function build() {
     // Load the site name out of configuration.
     $config = \Drupal::config('system.site');
-    return array(
+    return [
       '#markup' => $this->t('<h5>' . $config->get('name') . '</h5>'),
-    );
+    ];
   }
 
 }

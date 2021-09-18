@@ -8,65 +8,109 @@
 {{ form.image }}
 {{ form.title }}
 {{ form.isbn }}
+{{ form.book_id }}
 {{ form.subject }}
-{{ form.volume }}
 {{ form.grade }}
 {{ form.type }}
+{{ form.category }}
+{{ form.volume }}
 {{ form.consumable }}
 {{ form.depreciated }}
 {% if form.book_item.old is not empty %}
-  <table class="table">
-    <thead>
-      <tr>
-        <th scope="col">Book ID</th>
-        <th scope="col">Condition</th>
-        <th scope="col">Status</th>
-        <th scope="col">Operations</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for key, book in form.book_item.old %}
-        {% if 'container_' in key %}
-        <tr>
-          {% for key_2, book_fields in book %}
-            {% if 'book_id_label_' in key_2 %}
-            <td scope="row">{{ book_fields }}</td>
-            {% endif %}
-            {% if 'condition_' in key_2 %}
-              <td>{{ book_fields }}</td>
-            {% endif %}
-            {% if 'checked_status' in key_2 %}
-              <td>{{ book_fields }}</td>
-            {% endif %}
-            {% if 'delete' in key_2 %}
-              <td>{{ book_fields }}</td>
-            {% endif %}
-          {% endfor %}
-          <tr>
+  <div class="container">
+    <div class="accordion" id="bookAccordion">
+      {% for book_id, book in form.book_item.old.container %}
+        {% if book_id matches '/^\\d+$/' %}
+
+          <div class="card">
+            <div class="card-header" id="heading{{ book_id }}">
+              <h2 class="mb-0">
+                <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse{{ book_id }}" aria-expanded="true" aria-controls="collapse{{ book_id }}">
+                  {{ book.book_id}}
+                </button>
+              </h2>
+            </div>
+
+            <div id="collapse{{ book_id }}" class="collapse" aria-labelledby="heading{{ book_id }}" data-parent="#bookAccordion">
+              <div class="card-body">
+                <div class="row">
+                  {% for key_2, book_fields in book %}
+                    {% if 'book_id_label_' in key_2 %}
+                      <div class="col-lg-2 col-md-3">
+                        <div>
+                          <label>ID</label>
+                          {{ book_fields }}
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if 'condition_' in key_2 %}
+                      <div class="col-lg-8 col-md-6">
+                        <div>
+                          <label>Condition</label>
+                          {{ book_fields }}
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if 'checked_status' in key_2 %}
+                      <div class="col-lg-2 col-md-3">
+                        <div>
+                          <label>Status</label>
+                          {{ book_fields }}
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if 'disallow_' in key_2 %}
+                      <div class="col-md-12">{{ book_fields }}</div>
+                    {% endif %}
+                  {% endfor %}
+                  {% if book.book_notes.old %}
+                    {{ include('book-item-notes-table.html.twig', {book_item_notes: book.book_notes.old}) }}
+                  {% endif %}
+                  {% if book.book_notes.new is not empty %}
+                    {{ book.book_notes.new }}
+                  {% endif %}
+                  {% if book.add_notes %}
+                    <div class="col-md-12">{{ book.add_notes }}</div>
+                  {% endif %}
+                  {% if book.delete %}
+                    <div class="col-md-12">
+                      <br />
+                      {{ book.delete }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
         {% endif %}
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+  </div>
 {% endif %}
+
+
 <div id="book-items">
-  {% for key, book in form.book_item.new %}
-    {% if 'container_' in key %}
+  {% for key, book in form.book_item.new.container %}
+    {% if key matches '/^\\d+$/' %}
       <div class="row">
        {{ book }}
       </div>
     {% endif %}
   {% endfor %}
 </div>
-<p><strong>NOTE:</strong> Book ID Fromat: XXX-XXXX => the book number - last 4 ISBN digits.</p>
 <div>
-  {{ form.actions.add_book_item }}
+  {% if form.actions.add_book_item %}
+    {{ form.actions.add_book_item }}
+  {% endif %}
   {{ form.actions.submit }}
   {{ form.actions.cancel }}
 </div>
 <br />
-<div>
-  {{ form.actions.export_books }}
-</div>
+{% if form.actions.export_books %}
+  <div>
+    {{ form.actions.export_books }}
+  </div>
+{% endif %}
 {% if form.actions.delete_book is not empty %}
   <br />
   <div>

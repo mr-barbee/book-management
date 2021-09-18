@@ -6,6 +6,8 @@
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\Component\Utility\Html;
+use Drupal\node\Entity\Node;
 
 /**
  * [book_management_theme description]
@@ -23,13 +25,21 @@ function book_management_theme($existing, $type, $theme, $path) {
         'books' => NULL,
         'checkout_books_count' => NULL,
         'checkout_books' => NULL,
-        'student_count' => NULL,
-        'students' => NULL
+        'book_notes' => NULL
       ],
     ],
     'book_form' => [
       'render element' => 'form',
     ],
+    'check_out_book_form' => [
+      'render element' => 'form',
+    ],
+    'check_in_book_form' => [
+      'render element' => 'form',
+    ],
+    'book_item_notes_table' => [
+      'book_item_notes' => NULL
+    ]
   ];
 }
 
@@ -55,76 +65,73 @@ function book_management_preprocess_page(&$variables) {
 }
 
 /**
+ * [_add_unique_field_check_by_field_definitions description]
+ * @param [type] $field_name        [description]
+ * @param [type] $field             [description]
+ * @param [type] $field_definition  [description]
+ * @param [type] $content_type      [description]
+ * @see unique_field_ajax_field_widget_form_alter()
+ */
+function _add_unique_field_check_by_field_definitions($field_name, &$field, $field_definition, $content_type) {
+  $name = $field_definition->getFieldStorageDefinition()->getName();
+  if ($field_definition instanceof FieldConfig) {
+    $is_unique_per_lang = NULL;
+    if ((\Drupal::moduleHandler()
+        ->moduleExists('language')) && \Drupal::languageManager()
+        ->getCurrentLanguage()
+        ->getId()
+    ) {
+      $is_unique_per_lang = $field_definition->getThirdPartySetting('unique_field_ajax', 'per_lang');
+    }
+    if ($field_definition->getThirdPartySetting('unique_field_ajax', 'unique')) {
+      $field[$field_name]['#unique_field_ajax_settings'] = [
+        'per_lang' => $is_unique_per_lang,
+        'field_definition' => $field_definition,
+        'field_name' => $name,
+        'field_actual_name' => $field_name, // This field is cutom used if we want to check against a different field.
+        'field_type' => $content_type // We need this to get determine the entity type.
+      ];
+      // Add the element unique validation.
+      $field[$field_name]['#element_validate'][] = 'book_management_unique_field_ajax_validate_unique';
+      if ($field_definition->getThirdPartySetting('unique_field_ajax', 'use_ajax')) {
+        $field[$field_name]['#process'] = ['_book_management_unique_field_ajax_process'];
+      }
+    }
+  }
+}
+
+/**
  * [book_management_form_book_form_alter description]
  * @param [type]             $form       [description]
  * @param FormStateInterface $form_state [description]
  */
 function book_management_form_book_form_alter(&$form, FormStateInterface $form_state) {
-  $bundle_fields = array(
+  $bundle_fields = [
     'book' => \Drupal::service('entity_field.manager')->getFieldDefinitions('node', 'book'),
     'book_item' => \Drupal::service('entity_field.manager')->getFieldDefinitions('node', 'book_item')
-  );
+  ];
   foreach ($bundle_fields as $content_type => $bundle_field) {
-    // Get the appriopriate drupal definition for the entity type.
-    $field_definition = $content_type == 'book' ? $bundle_field['field_book_isbn'] : $bundle_field['field_book_item_id'];
-    $name = $field_definition->getFieldStorageDefinition()->getName();
-    if ($field_definition instanceof FieldConfig) {
-      $is_unique_per_lang = NULL;
-      if ((\Drupal::moduleHandler()
-          ->moduleExists('language')) && \Drupal::languageManager()
-          ->getCurrentLanguage()
-          ->getId()
-      ) {
-        $is_unique_per_lang = $field_definition->getThirdPartySetting('unique_field_ajax', 'per_lang');
-      }
-      // Depending on the content type we want to update the field
-      // with attributes used to check if the field is unique.
-      switch ($content_type) {
-        case 'book':
-          if (isset($form['isbn'])) {
-            $form['isbn']['#unique_field_ajax_settings'] = [
-              'per_lang' => $is_unique_per_lang,
-              'field_definition' => $field_definition,
-              'field_name' => $name,
-              'field_actual_name' => 'isbn',
-              'field_concate_name' => FALSE,
-              'field_type' => $content_type
-            ];
-            // Add the element unique validation.
-            $form['isbn']['#element_validate'][] = 'book_management_unique_field_ajax_validate_unique';
-            if ($field_definition->getThirdPartySetting('unique_field_ajax', 'use_ajax')) {
-              $form['isbn']['#process'] = ['_book_management_unique_field_ajax_process'];
-            }
-          }
-          break;
+    switch ($content_type) {
+      case 'book':
+        if (isset($form['isbn'])) {
+          // Get the appriopriate drupal definition for the entity type.
+          _add_unique_field_check_by_field_definitions('isbn', $form, $bundle_field['field_book_isbn'], $content_type);
+        }
+        if (isset($form['book_id'])) {
+          // Get the appriopriate drupal definition for the entity type.
+          _add_unique_field_check_by_field_definitions('book_id', $form, $bundle_field['field_book_id'], $content_type);
+        }
+        break;
 
-        case 'book_item':
-          // Save each elements configs to each form element.
-          foreach ($form_state->getFormObject()->getBookItemDeltas() as $delta) {
-            if ($field_definition->getThirdPartySetting('unique_field_ajax', 'unique')) {
-              if (isset($form['book_item']['new']['container_' . $delta]['book_id_' . $delta])) {
-                $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#unique_field_ajax_settings'] = [
-                  'per_lang' => $is_unique_per_lang,
-                  'field_definition' => $field_definition,
-                  'field_name' => $name,
-                  'field_actual_name' => 'book_id_' . $delta,
-                  'field_concate_name' => 'isbn',
-                  'field_type' => $content_type
-                ];
-                // Add the element unique validation.
-                $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#element_validate'][] = 'book_management_unique_field_ajax_validate_unique';
-                if ($field_definition->getThirdPartySetting('unique_field_ajax', 'use_ajax')) {
-                  $form['book_item']['new']['container_' . $delta]['book_id_' . $delta]['#process'] = ['_book_management_unique_field_ajax_process'];
-                }
-              }
-            }
+      case 'book_item':
+        // Save each elements configs to each form element.
+        foreach ($form_state->getFormObject()->getBookItemDeltas() as $delta) {
+          if (isset($form['book_item']['new']['container_' . $delta]['book_id_' . $delta])) {
+            // Get the appriopriate drupal definition for the entity type.
+            _add_unique_field_check_by_field_definitions('book_id_' . $delta, $form['book_item']['new']['container_' . $delta], $bundle_field['field_book_item_id'], $content_type);
           }
-          break;
-
-        default:
-          // code...
-          break;
-      }
+        }
+        break;
     }
   }
 }
@@ -132,6 +139,7 @@ function book_management_form_book_form_alter(&$form, FormStateInterface $form_s
 /**
  * Attach ajax to unique field.
  *
+ * @see _unique_field_ajax_process()
  * @param $element
  * @param \Drupal\Core\Form\FormStateInterface $form_state
  * @param $form
@@ -143,29 +151,24 @@ function _book_management_unique_field_ajax_process($element, FormStateInterface
   $field_name = $element['#unique_field_ajax_settings']['field_name'];
   $field_type = $element['#unique_field_ajax_settings']['field_type'];
   $field_actual_name = $element['#unique_field_ajax_settings']['field_actual_name'];
-  $field_concate_name = $element['#unique_field_ajax_settings']['field_concate_name'];
   $field_definition = $element['#unique_field_ajax_settings']['field_definition'];
   $field_label = $field_definition->label();
   $wrapper = 'unique-' . $field_name;
   if(!empty($form['#attached']['library']) && !in_array('unique_field_ajax/unique_event',$form['#attached']['library'])){
     $form['#attached']['library'][] = 'unique_field_ajax/unique_event';
   }
-  $settings = array('id' => '#'.$wrapper.' input');
+  $settings = ['id' => '#'.$wrapper.' input'];
   $form['#attached']['drupalSettings']['unique_field_ajax'][] = $settings;
   $element['#ajax'] = [
     'callback' => '_unique_field_ajax',
     'event' => 'finishedinput',
     'wrapper' => $wrapper,
-    'progress' => array(
+    'progress' => [
       'type' => 'throbber',
-      'message' => t('Verifying @field_label...', array('@field_label' => $field_label)),
-    )
+      'message' => t('Verifying @field_label...', ['@field_label' => $field_label]),
+    ]
   ];
   $value = $form_state->getValue($field_actual_name);
-  // If the concate name is set then we want to format the value.
-  if ($field_concate_name) {
-    $value = \Drupal::service('book_management.services')->getBookIdFormat($form_state->getValue($field_concate_name), $value);
-  }
   switch ($field_type) {
     case 'book':
       $element['#prefix'] = '<div id="' . $wrapper . '">';
@@ -203,6 +206,8 @@ function _book_management_unique_field_ajax_process($element, FormStateInterface
 
 /**
  * [book_management_unique_field_ajax_validate_unique description]
+ *
+ * @see unique_field_ajax_validate_unique()
  * @param  [type]             $element    [description]
  * @param  FormStateInterface $form_state [description]
  * @param  array              $form       [description]
@@ -228,21 +233,16 @@ function book_management_unique_field_ajax_validate_unique($element, FormStateIn
   // Gather all the elements from the form.
   $field_name = $element['#unique_field_ajax_settings']['field_name'];
   $field_actual_name = $element['#unique_field_ajax_settings']['field_actual_name'];
-  $field_concate_name = $element['#unique_field_ajax_settings']['field_concate_name'];
   $field_definition = $element['#unique_field_ajax_settings']['field_definition'];
   $field_label = $field_definition->label();
   $value = $form_state->getValue($field_actual_name);
   $entity_type = $entity->getEntityTypeId();
 
-  // If the concate name is set then we want to format the value.
-  if ($field_concate_name) {
-    $value = \Drupal::service('book_management.services')->getBookIdFormat($form_state->getValue($field_concate_name), $value);
-  }
   // If field is not unique set error.
   $valid = unique_field_ajax_is_unique($entity_type, '0', $field_name, $value, $entity->bundle(), $element['#unique_field_ajax_settings']['per_lang'], $entity);
   // If its not valid then set an error.
   if (!$valid) {
-    $form_state->setErrorByName($field_actual_name, t('The field @field_label has to be unique.', array('@field_label' => $field_label)));
+    $form_state->setErrorByName($field_actual_name, t('The field @field_label has to be unique.', ['@field_label' => $field_label]));
     $form_state->setRebuild();
   }
 }
@@ -255,4 +255,126 @@ function book_management_ajax_render_alter(array &$data) {
   $data[] = [
     'command' => 'reinstantiateBootstrapSelect'
   ];
+}
+
+/**
+ * [save_book_and_book_items_run description]
+ * @param  [type] $book_content               [description]
+ * @param  [type] $context                    [description]
+ * @return [type]               [description]
+ */
+function save_book_and_book_items_run($book_content, &$context) {
+  $service = \Drupal::service('book_management.services');
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_id'] = 0;
+    $context['sandbox']['max'] = count($book_content);
+  }
+  // We want to process the book content in chunks.
+  // Safely process 5 nodes at a time without a timeout.
+  $book_chunks = array_chunk($book_content, 5);
+  foreach ($book_chunks[$context['sandbox']['current_id']] as $key => $book) {
+    $book_updated = FALSE;
+    $grade_id = $service->getTaxonomyIdFromMachineName('grade', $book['grade']);
+    $category_id = $service->getTaxonomyIdFromMachineName('book_category', $book['category']);
+    $type_id = $service->getTaxonomyIdFromMachineName('book_type', $book['type']);
+    // Check to see if the ISBN is all ready saved in the system.
+    $book_entity = $service->getBookById($book['id']);
+    if ($book_entity == FALSE){
+      $book_updated = TRUE;
+      // I want to make a new book node
+      $book_entity = Node::create(['type' => 'book']);
+      $book_entity->enforceIsNew();
+      $book_entity->set('title', $book['title']);
+      $book_entity->set('field_book_isbn', $book['isbn']);
+      $book_entity->set('field_book_id', $book['id']);
+      $book_entity->set('field_book_subject', $book['subject']);
+      if (!empty($grade_id)) {
+        $book_entity->set('field_book_grade', [['target_id' => $grade_id]]);
+      }
+      $book_entity->set('field_book_volume', $book['volume']);
+      if (!empty($type_id)) {
+        $book_entity->set('field_book_type', [['target_id' => $type_id]]);
+      }
+      if (!empty($category_id)) {
+        $book_entity->set('field_book_category', [['target_id' => $category_id]]);
+      }
+      $book_entity->set('field_book_depreciated', FALSE);
+      $book_entity->status = 1;
+      $book_entity->save();
+    }
+    $current_book_count = count($book_entity->get('field_book_items')->getValue());
+    // Check to see if there are any books to import.
+    if (!empty($book['book_count']) && $book['book_count'] > $current_book_count) {
+      // current book is set then we want to start from the next book.
+      $i = !empty($current_book_count) ? $current_book_count + 1 : 1;
+      $book_updated = TRUE;
+      $next_book_id = NULL;
+      while ($i <= $book['book_count']) {
+        // Get the next book Item and save it to the form.
+        if ($next_book_id = $service->getNextBookId($book_entity, $next_book_id)) {
+          // Generate a new book item.
+          $book_item = Node::create(['type' => 'book_item']);
+          $book_item->enforceIsNew();
+
+          $book_item->set('field_book_item_id', $next_book_id);
+          $book_item->set('title', $book['title'] . ' Book #' . $next_book_id);
+          // We want to default the propety to excellent.
+          $category = \Drupal::entityTypeManager()
+            ->getStorage('taxonomy_term')
+            ->loadByProperties(['name' => 'excellent', 'vid' => 'conditions']);
+          $category = reset($category);
+          // Update the condition and save the book node.
+          $book_item->set('field_book_item_condition',[['target_id' => $category->id()]]);
+          // And the book node to the book item.
+          $book_item->field_book->target_id = $book_entity->id();
+          $book_item->status = 1;
+          $book_item->save();
+
+          // Save the book item to the book node.
+          $book_entity->field_book_items[] = ['target_id' => $book_item->id()];
+        }
+        $i++;
+      }
+      // Resave the bok node.
+      $book_entity->save();
+    }
+    if ($book_updated) {
+      // Store some result for post-processing in the finished callback.1
+      $context['results'][] = Html::escape($book_entity->get('title')->getString());
+    }
+
+    // Update our progress information.
+    $context['sandbox']['progress']++;
+    $context['message'] = t('Now processing Batch API overview', ['Batch API overview' => $book_entity->get('title')->getString()]);
+  }
+  // Update the current ID.
+  $context['sandbox']['current_id']++;
+
+  // Inform the batch engine that we are not finished,
+  // and provide an estimation of the completion level we reached.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+}
+
+/**
+ * [save_book_and_book_items_finished description]
+ * @param  [type] $success                  [description]
+ * @param  [type] $results                  [description]
+ * @param  [type] $operations               [description]
+ * @return [type]             [description]
+ */
+function save_book_and_book_items_finished($success, $results, $operations) {
+  if ($success) {
+    $message = \Drupal::translation()->formatPlural(count($results), 'One book processed.', '@count books successfully processed.');
+    \Drupal::messenger()->addMessage($message);
+  }
+  else {
+    // An error occurred.
+    // $operations contains the operations that remained unprocessed.
+    $error_operation = reset($operations);
+    $message = t('An error occurred while processing %error_operation with arguments: @arguments', ['%error_operation' => $error_operation[0], '@arguments' => print_r($error_operation[1], TRUE)]);
+    \Drupal::messenger()->addError($message);
+  }
 }

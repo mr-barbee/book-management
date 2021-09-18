@@ -46,19 +46,21 @@
     {% endfor %}
   </tbody>
 </table>
-<h4>Total Students: {{ student_count }}</h4>
+<h4>Latest Book Notes:</h4>
 <table class="table">
   <thead>
     <tr>
-      <th scope="col">Name</th>
-      <th scope="col">Grade</th>
+      <th scope="col">Book</th>
+      <th scope="col">Note</th>
+      <th scope="col">Date</th>
     </tr>
   </thead>
   <tbody>
-    {% for key, student in students %}
+    {% for key, book_note in book_notes %}
       <tr>
-        <td scope="row">{{ student.name }}</td>
-        <td>{{ student.grade }}</td>
+        <td scope="row">{{ book_note.book_link }}</td>
+        <td scope="row">{{ book_note.note }}</td>
+        <td>{{ book_note.date }}</td>
       </tr>
     {% endfor %}
   </tbody>

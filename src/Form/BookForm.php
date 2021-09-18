@@ -7,6 +7,7 @@ namespace Drupal\book_management\Form;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\paragraphs\Entity\Paragraph;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\node\Entity\Node;
@@ -15,9 +16,11 @@ use Drupal\Core\Url;
 
 class BookForm extends FormBase {
   // The default delta is one.
-  protected $book_item_deltas = array();
+  protected $book_item_deltas = [];
+  protected $book_item_note_deltas = [];
   protected $book_entity;
   protected $book_item_entity;
+  protected $next_book_id;
   protected $account;
   protected $service;
 
@@ -36,12 +39,28 @@ class BookForm extends FormBase {
     return $this->book_item_deltas;
   }
 
+  protected function setBookItemNoteDeltas($book_id, $value) {
+    $this->book_item_note_deltas[$book_id][$value] = $value;
+  }
+
+  public function getBookIteNotemDeltas() {
+    return $this->book_item_note_deltas;
+  }
+
   protected function setBookEntity($value) {
     $this->book_entity = $value;
   }
 
   public function getBookEntity() {
     return $this->book_entity;
+  }
+
+  protected function setNextBookId($value) {
+    $this->next_book_id = $value;
+  }
+
+  public function getNextBookId() {
+    return $this->next_book_id;
   }
 
   protected function setBookItemEntity($value) {
@@ -61,6 +80,7 @@ class BookForm extends FormBase {
     $this->book_entity = Node::create(['type' => 'book']);
     $this->book_entity->enforceIsNew();
     $this->book_item_entity = Node::create(['type' => 'book_item']);
+    $this->next_book_id = NULL;
     $this->service = \Drupal::service('book_management.services');
   }
 
@@ -110,7 +130,7 @@ class BookForm extends FormBase {
       // Gather the list of form fields and
       // setting the default value based on
       // node data.
-      $form['image'] = array(
+      $form['image'] = [
         '#type' => 'book_managed_file',
         '#upload_location' => 'public://book-images',
         '#multiple' => FALSE,
@@ -122,188 +142,286 @@ class BookForm extends FormBase {
         ],
         '#title' => t('Upload a Book Image'),
         '#default_value' => ['fid' => $photo ? $photo['target_id'] : '']
-      );
-      $form['title'] = array(
+      ];
+      $form['title'] = [
         '#type' => 'textfield',
         '#title' => t('Title:'),
         '#required' => TRUE,
         '#default_value' => $this->book_entity->get('title')->getString(),
-      );
-      $form['isbn'] = array(
+      ];
+      $form['isbn'] = [
         '#type' => 'textfield',
         '#title' => t('ISBN:'),
-        '#required' => TRUE,
-        '#maxlength' => 13,
+        '#maxlength' => 15,
         '#default_value' => $this->book_entity->get('field_book_isbn')->getString(),
-      );
-      $form['subject'] = array (
+      ];
+      $form['book_id'] = [
+        '#type' => 'textfield',
+        '#title' => t('Book ID:'),
+        '#required' => TRUE,
+        '#maxlength' => 3,
+        '#description' => $this->t('This book ID follows the Dewey Decimal System format. This <strong>cant</strong> be changed once set.'),
+        '#default_value' => $this->book_entity->get('field_book_id')->getString(),
+      ];
+      if (!empty($this->book_entity->get('field_book_id')->getString())) {
+        $form['book_id']['#attributes'] = ['disabled' => TRUE];
+      }
+      $form['subject'] = [
         '#type' => 'textfield',
         '#title' => t('Subject:'),
         '#default_value' => $this->book_entity->get('field_book_subject')->getString(),
-      );
-      $form['grade'] = array (
+      ];
+      $form['grade'] = [
         '#type' => 'select',
         '#title' => t('Grade'),
-        '#options' => $this->service->getGrade(),
+        '#options' => $this->service->getTaxonomyIdFromVid('grade'),
         '#required' => TRUE,
         '#default_value' => $this->book_entity->get('field_book_grade')->getString(),
-      );
-      $form['volume'] = array (
+      ];
+      $form['volume'] = [
         '#type' => 'textfield',
         '#title' => t('Volume:'),
         '#default_value' => $this->book_entity->get('field_book_volume')->getString(),
-      );
-      $form['type'] = array (
+      ];
+      $form['type'] = [
         '#type' => 'select',
         '#title' => t('Type'),
-        '#options' => $this->service->getBookTypes(),
-        '#required' => TRUE,
+        '#options' => $this->service->getTaxonomyIdFromVid('book_type'),
         '#default_value' => $this->book_entity->get('field_book_type')->getString(),
-      );
-      $form['depreciated'] = array (
+      ];
+      $form['category'] = [
+        '#type' => 'select',
+        '#title' => t('Category'),
+        '#options' => $this->service->getTaxonomyIdFromVid('book_category'),
+        '#required' => TRUE,
+        '#default_value' => $this->book_entity->get('field_book_category')->getString(),
+      ];
+      $form['depreciated'] = [
         '#type' => 'checkbox',
         '#title' => ('Book is depreciated?'),
         '#default_value' => $this->book_entity->get('field_book_depreciated')->getString(),
-      );
-      $form['consumable'] = array (
-        '#type' => 'checkbox',
-        '#title' => ('Consumable Book?'),
-        '#default_value' => $this->book_entity->get('field_book_consumable')->getString(),
-      );
+      ];
 
-      $form['book_item']['new'] = array(
+      $form['book_item']['new'] = [
         '#prefix' => '<div id="book-items">',
         '#suffix' => '</div>',
-      );
+      ];
 
       foreach ($this->book_item_deltas as $delta) {
         // Only retrieve the entity if is not a new one in the system.
         if (strpos($delta, '_new') === FALSE) {
           $book_item_entity = \Drupal::entityTypeManager()->getStorage('node')->load($delta);
-          // Dont allow the node deletion if we have an active recod for any of its related book items.
-          $allow_deletion = $allow_deletion && $book_item_entity->get('field_book_item_active_record')->getString() == 0 ? TRUE : FALSE;
-          // Gather the link for the active record.
-          $link = Link::fromTextAndUrl($book_item_entity->get('field_book_item_id')->getString(), Url::fromUserInput('/book-management/search-records?book_id=' . $book_item_entity->get('field_book_item_id')->getString()))->toString();
-          $form['book_item']['old']['container_' . $delta]['book_id_label_' . $delta] = array(
-           '#markup' => '<h3>' . $link . '</h3>',
-          );
-          // This field will be diabled if we have an active record in the account
-          // bc we dont want to be able to update the condition if its not currently
-          // checked out.
-          $form['book_item']['old']['container_' . $delta]['condition_' . $delta] = array (
-            '#type' => 'select',
-            '#options' => $this->service->getConditions(),
-            '#required' => TRUE,
-            '#default_value' => $book_item_entity->get('field_book_item_condition')->getString(),
-            '#disabled' => $book_item_entity->get('field_book_item_active_record')->getString() !== '0',
-            '#description' => $this->t('This can only be changed if the book is Checked In.'),
-          );
-          // Also only add the link to record if active record is set.
-          $markup = $book_item_entity->get('field_book_item_active_record')->getString() !== '0' ?
-            Link::fromTextAndUrl(t('Checked Out'), Url::fromUserInput('/book-management/search-records/' . $book_item_entity->get('field_book_item_active_record')->getString()))->toString() :
-            $this->t('Checked In');
-          $form['book_item']['old']['container_' . $delta]['checked_status'] = array(
-           '#markup' => '<div><H5>' . $markup . '</h5></div>',
-          );
-          // If there isnt an active record set than allow the user to delete the book item.
-          if ($book_item_entity->get('field_book_item_active_record')->getString() == '0') {
-            $form['book_item']['old']['container_' . $delta]['delete'] = array (
-              '#type' => 'link',
-              '#title' => $this->t('Delete'),
-              '#url' => Url::fromRoute('book_management.delete_book_item', ['bid' => $this->getBookEntity()->id(), 'nid' => $delta]),
-           );
+          if (!empty($book_item_entity)) {
+            foreach ($book_item_entity->get('field_book_item_notes')->getValue() as $key => $note) {
+              // Gather a list of book item note deltas saved to
+              // the book item node.
+              $this->setBookItemNoteDeltas($delta, $note['target_id']);
+            }
+            // Dont allow the node deletion if we have an active recod for any of its related book items.
+            $allow_deletion = $allow_deletion && $book_item_entity->get('field_book_item_active_record')->getString() == 0 ? TRUE : FALSE;
+            // Gather the link for the active record.
+            $link = Link::fromTextAndUrl($book_item_entity->get('field_book_item_id')->getString(), Url::fromUserInput('/book-management/search-records?book_id=' . $book_item_entity->get('field_book_item_id')->getString()))->toString();
+            $form['book_item']['old']['container'][$delta]['book_id_label_' . $delta] = [
+             '#markup' => '<h3>' . $link . '</h3>',
+            ];
+            $form['book_item']['old']['container'][$delta]['book_id'] = [
+              '#markup' => '<h3>' . $book_item_entity->get('field_book_item_id')->getString() . '</h3>',
+            ];
+            // This field will be diabled if we have an active record in the account
+            // bc we dont want to be able to update the condition if its not currently
+            // checked out.
+            $form['book_item']['old']['container'][$delta]['condition_' . $delta] = [
+              '#type' => 'select',
+              '#options' => $this->service->getTaxonomyIdFromVid('conditions'),
+              '#required' => TRUE,
+              '#default_value' => $book_item_entity->get('field_book_item_condition')->getString(),
+              '#disabled' => $book_item_entity->get('field_book_item_active_record')->getString() !== '0',
+              '#description' => $this->t('This can only be changed if the book is Checked In.'),
+            ];
+            // Also only add the link to record if active record is set.
+            $markup = $book_item_entity->get('field_book_item_active_record')->getString() !== '0' ?
+              Link::fromTextAndUrl(t('Checked Out'), Url::fromUserInput('/book-management/search-records/' . $book_item_entity->get('field_book_item_active_record')->getString()))->toString() :
+              $this->t('Checked In');
+            $form['book_item']['old']['container'][$delta]['checked_status'] = [
+             '#markup' => '<div><H5>' . $markup . '</h5></div>',
+           ];
+            $form['book_item']['old']['container'][$delta]['disallow_' . $delta] = [
+              '#type' => 'checkbox',
+              '#title' => ('Dont allow this book to be checked out.'),
+              '#default_value' => $book_item_entity->get('field_book_item_disallow')->getString(),
+            ];
+
+            $form['book_item']['old']['container'][$delta]['book_notes']['new'] = [
+              '#prefix' => '<div id="book-items-notes-' . $delta . '" >',
+              '#suffix' => '</div>'
+            ];
+
+            // We want to loop through the note deltas and print them
+            // to the page for each book item.
+            if (!empty($this->book_item_note_deltas[$delta])) {
+              foreach ($this->book_item_note_deltas[$delta] as $note_id) {
+                // Check to see if this is a new note item.
+                if (strpos($note_id, '_new') === FALSE) {
+                  $p = Paragraph::load($note_id);
+                  $text = $p->field_book_note->getValue();
+                  if ($id = $p->field_book_note_record_id->getValue()[0]['value']) {
+                    $markup = Link::fromTextAndUrl(t($text[0]['value']), Url::fromUserInput('/book-management/search-records/' . $id))->toString();
+                  }
+                  else {
+                    $markup = $text[0]['value'];
+                  }
+                  $form['book_item']['old']['container'][$delta]['book_notes']['old'][$note_id]['note'] = [
+                    '#markup' => '<p>' . $markup . '</p>'
+                  ];
+                  if (!empty($p->field_book_note_date)) {
+                    $form['book_item']['old']['container'][$delta]['book_notes']['old'][$note_id]['date'] = [
+                      '#markup' => '<p>' . $p->field_book_note_date->date->format('m/d/Y - g:ia') . '</p>'
+                    ];
+                  }
+                }
+                else {
+                  $form['book_item']['old']['container'][$delta]['book_notes']['new'][$note_id]['note_' . $note_id . '_' . $delta] = [
+                    '#type' => 'textarea',
+                    '#attributes' => ['placeholder' => $this->t('Note')],
+                    '#prefix' => '<div class="col-md-12">',
+                    '#suffix' => '</div>',
+                    '#rows' => 3,
+                    '#col' => 2,
+                  ];
+                }
+              }
+            }
+
+            $form['book_item']['old']['container'][$delta]['add_notes'] = [
+              '#type' => 'submit',
+              '#value' => $this->t('Add a Note'),
+              '#limit_validation_errors' => [],
+              '#submit' => ['::AddBookItemNotes'],
+              '#ajax' => [
+                'callback' => '::BookNoteFormAjaxCallback',
+                'wrapper' => 'book-items-notes-' . $delta,
+              ],
+              '#name' => 'book_item_note_' . $delta
+           ];
+
+           // If there isnt an active record set than allow the user to delete the book item.
+           if ($book_item_entity->get('field_book_item_active_record')->getString() == '0') {
+             $form['book_item']['old']['container'][$delta]['delete'] = array (
+               '#type' => 'link',
+               '#title' => $this->t('Delete'),
+               '#url' => Url::fromRoute('book_management.delete_book_item', ['bid' => $this->getBookEntity()->id(), 'nid' => $delta]),
+             );
+           }
           }
         }
         else {
           // Here we allow the user to add the book item to the book node.
-          $form['book_item']['new']['container_' . $delta] = array(
-            '#prefix' => '<div class="row">',
+          $form['book_item']['new']['container'][$delta] = [
+            '#prefix' => '<hr /><div class="row">',
             '#suffix' => '</div>',
-          );
-
-          $form['book_item']['new']['container_' . $delta]['book_id_' . $delta] = array(
+          ];
+          $form['book_item']['new']['container'][$delta]['book_id_' . $delta] = [
             '#type' => 'textfield',
             '#required' => TRUE,
-            '#maxlength' => 3,
-            '#description' => $this->t('This cant be changed once saved. You <strong>ONLY</strong> need to enter in the book number. Up-to 3-digits (XXX).'),
-            '#attributes' => array('placeholder' => $this->t('Book Number')),
+            '#default_value' => $this->getNextBookId(),
+            '#maxlength' => 7,
+            '#description' => $this->t('This cant be changed once saved.<br /><strong>NOTE:</strong> Book ID Fromat: XXX-XXX => the book ID - the book count.'),
+            '#attributes' => ['placeholder' => $this->t('Book Number')],
             '#prefix' => '<div class="col-md-4">',
             '#suffix' => '</div>',
-          );
+          ];
 
-          $form['book_item']['new']['container_' . $delta]['condition_' . $delta] = array (
+          $form['book_item']['new']['container'][$delta]['condition_' . $delta] = [
             '#type' => 'select',
-            '#options' => $this->service->getConditions(),
+            '#options' => $this->service->getTaxonomyIdFromVid('conditions'),
             '#required' => TRUE,
             '#description' => $this->t('This can only be changed if the book is Checked In.'),
             '#prefix' => '<div class="col-md-4">',
             '#suffix' => '</div>',
-          );
+          ];
 
-          $form['book_item']['new']['container_' . $delta]['checked_status'] = array(
+          $form['book_item']['new']['container'][$delta]['checked_status'] = [
             '#markup' => '<div><h4>' . $this->t('Checked In') . '</h4></div>',
             '#prefix' => '<div class="col-md-4">',
             '#suffix' => '</div>',
-          );
+          ];
 
-          $form['book_item']['new']['container_' . $delta]['remove'] = array (
+          $form['book_item']['new']['container'][$delta]['disallow_' . $delta] = [
+            '#type' => 'checkbox',
+            '#title' => ('Dont allow this book to be checked out.'),
+            '#prefix' => '<div class="col-md-12">',
+            '#suffix' => '</div>',
+          ];
+
+          $form['book_item']['new']['container'][$delta]['note_1_new_' . $delta] = [
+            '#type' => 'textarea',
+            '#attributes' => ['placeholder' => $this->t('Note')],
+            '#prefix' => '<div class="col-md-12">',
+            '#suffix' => '</div>',
+            '#rows' => 3,
+            '#col' => 2,
+         ];
+
+          $form['book_item']['new']['container'][$delta]['remove'] = [
             '#type' => 'submit',
             '#value' => $this->t('remove'),
-            '#limit_validation_errors' => array(),
-            '#submit' => array('::RemoveBookItem'),
-            '#ajax' => array(
+            '#limit_validation_errors' => [],
+            '#submit' => ['::RemoveBookItem'],
+            '#ajax' => [
               'callback' => '::BookFormAjaxCallback',
               'wrapper' => 'book-items',
-            ),
+            ],
             '#name' => 'book_item_' . $delta,
             '#prefix' => '<div class="col-md-12">',
             '#suffix' => '</div>'
-         );
+         ];
         }
       }
       // Disable caching on this form.
       $form_state->setCached(FALSE);
-
-      $form['actions']['add_book_item'] = array(
-       '#type' => 'submit',
-       '#value' => $this->t('Add a Book Item'),
-       '#limit_validation_errors' => array(),
-       '#submit' => array('::AddBookItem'),
-       '#ajax' => array(
-         'callback' => '::BookFormAjaxCallback',
-         'wrapper' => 'book-items',
-       ),
-      );
+      if (!empty($nid)) {
+        $form['actions']['add_book_item'] = [
+         '#type' => 'submit',
+         '#value' => $this->t('Add a Book Item'),
+         '#limit_validation_errors' => [],
+         '#submit' => ['::AddBookItem'],
+         '#ajax' => [
+           'callback' => '::BookFormAjaxCallback',
+           'wrapper' => 'book-items',
+         ],
+        ];
+      }
 
       // Add the js to the form.
       $form['#attached']['library'][] = 'book_management/book_management';
       $form['actions']['#type'] = 'actions';
-      $form['actions']['submit'] = array(
+      $form['actions']['submit'] = [
        '#type' => 'submit',
        '#value' => $this->t('Save'),
        '#button_type' => 'primary',
-      );
-      $form['actions']['cancel'] = array(
+      ];
+      $form['actions']['cancel'] = [
        '#type' => 'submit',
        '#value' => $this->t('Cancel'),
        '#button_type' => 'secondary',
-       '#limit_validation_errors' => array(),
-       '#submit' => array('::CancelEditBook'),
-      );
-
-      $form['actions']['export_books'] = array(
-       '#type' => 'submit',
-       '#value' => $this->t('Export Books'),
-       '#limit_validation_errors' => array(),
-       '#submit' => array('::ExportBooks')
-      );
+       '#limit_validation_errors' => [],
+       '#submit' => ['::CancelEditBook'],
+      ];
+      if (!empty($nid)) {
+        $form['actions']['export_books'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Export Books'),
+          '#limit_validation_errors' => [],
+          '#submit' => ['::ExportBooks']
+        ];
+      }
 
       if ($allow_deletion && $this->getBookEntity()->id() !== NULL) {
-        $form['actions']['delete_book'] = array (
+        $form['actions']['delete_book'] = [
          '#type' => 'link',
          '#title' => $this->t('Delete'),
          '#url' => Url::fromRoute('book_management.delete_book', ['nid' => $this->getBookEntity()->id()])
-       );
+       ];
       }
     }
     catch (\Exception $e) {
@@ -329,6 +447,17 @@ class BookForm extends FormBase {
   /**
    * {@inheritdoc}
    */
+  public function BookNoteFormAjaxCallback($form, $form_state) {
+    // Remove the triggering element fromt he deltas.
+    $triggering_element = $form_state->getTriggeringElement()['#name'];
+    $delta = str_replace('book_item_note_', '', $triggering_element);
+    return $form['book_item']['old']['container'][$delta]['book_notes']['new'];
+  }
+
+
+  /**
+   * {@inheritdoc}
+   */
   public function ExportBooks(array &$form, FormStateInterface $form_state) {
     try {
       // Get the book entity.
@@ -346,7 +475,7 @@ class BookForm extends FormBase {
         fputcsv($fh, [
           $book_item->get('field_book_item_id')->getValue()[0]['value'],
           $isbn,
-          $book_item->get('field_book_item_condition')->getValue()[0]['value'],
+          $this->service->getTaxonomyNameFromId('grade', $this->book_entity->get('field_book_grade')->getString()),
           $book_item->get('field_book_item_active_record')->getValue()[0]['value']
         ]);
       }
@@ -378,13 +507,41 @@ class BookForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function AddBookItem(array &$form, FormStateInterface $form_state) {
+  public function AddBookItemNotes(array &$form, FormStateInterface $form_state) {
+    // Remove the triggering element fromt he deltas.
+    $triggering_element = $form_state->getTriggeringElement()['#name'];
+    // Get the next book Item and save it to the form.
     // Return all the deltas and strip out the _new tag from created book items.
-    $output = array_map(function($val) { return str_replace('_new', '', $val); }, $this->book_item_deltas);
+    $delta = str_replace('book_item_note_', '', $triggering_element);
+    // Return all the deltas and strip out the _new tag from created book items.
+    if (is_array($this->book_item_note_deltas[$delta])) {
+      $output = array_map(function($val) { return str_replace('_new', '', $val); }, $this->book_item_note_deltas[$delta]);
+    }
     // Increment the previous delta to get the new delta.
     $new_delta = !empty($output) ? max($output) + 1 : 1;
     // Add the _new tag back to the delta.
-    $this->book_item_deltas[$new_delta . '_new'] = $new_delta . '_new';
+    $this->setBookItemNoteDeltas($delta, $new_delta . '_new');
+    $form_state->setRebuild();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function AddBookItem(array &$form, FormStateInterface $form_state) {
+    // Get the next book Item and save it to the form.
+    $next_book_id = $this->getNextBookId();
+    if ($book_id = $this->service->getNextBookId($this->book_entity, $next_book_id)) {
+      $this->setNextBookId($book_id);
+      // Return all the deltas and strip out the _new tag from created book items.
+      $output = array_map(function($val) { return str_replace('_new', '', $val); }, $this->book_item_deltas);
+      // Increment the previous delta to get the new delta.
+      $new_delta = !empty($output) ? max($output) + 1 : 1;
+      $new_delta = $new_delta . '_new';
+      // Add the _new tag back to the delta.
+      $this->book_item_deltas[$new_delta] = $new_delta;
+      // Add the note to the deltas.
+      $this->setBookItemNoteDeltas($new_delta, '1_new');
+    }
     $form_state->setRebuild();
   }
 
@@ -416,17 +573,14 @@ class BookForm extends FormBase {
     if (empty($form_state->getValue('title'))) {
       $form_state->setErrorByName('title', $this->t('This Field is Required.'));
     }
-    if (empty($form_state->getValue('isbn'))) {
-      $form_state->setErrorByName('isbn', $this->t('This Field is Required.'));
+    if (empty($form_state->getValue('book_id'))) {
+      $form_state->setErrorByName('book_id', $this->t('This Field is Required.'));
     }
     if (empty($form_state->getValue('subject'))) {
       $form_state->setErrorByName('subject', $this->t('This Field is Required.'));
     }
     if (empty($form_state->getValue('grade'))) {
       $form_state->setErrorByName('grade', $this->t('This Field is Required.'));
-    }
-    if (empty($form_state->getValue('type'))) {
-      $form_state->setErrorByName('type', $this->t('This Field is Required.'));
     }
     foreach ($this->book_item_deltas as $delta) {
       // Check all of the deltas and sort out all
@@ -460,12 +614,15 @@ class BookForm extends FormBase {
       ] : [];
       $book_node->set('field_book_image', $image);
       $book_node->set('field_book_isbn', $values['isbn']);
+      $book_node->set('field_book_id', $values['book_id']);
       $book_node->set('field_book_subject', $values['subject']);
-      $book_node->set('field_book_grade', $values['grade']);
+      $book_node->set('field_book_grade', [['target_id' => $values['grade']]]);
       $book_node->set('field_book_volume', $values['volume']);
-      $book_node->set('field_book_type', $values['type']);
+      if (!empty($values['type'])) {
+        $book_node->set('field_book_type', [['target_id' => $values['type']]]);
+      }
+      $book_node->set('field_book_category', [['target_id' => $values['category']]]);
       $book_node->set('field_book_depreciated', $values['depreciated']);
-      $book_node->set('field_book_consumable', $values['consumable']);
       $book_node->status = 1;
       $book_node->save();
       // Loop through all of the book item deltas.
@@ -479,16 +636,41 @@ class BookForm extends FormBase {
         else {
           $book_item = Node::create(['type' => 'book_item']);
           $book_item->enforceIsNew();
-          // Format the Book ID value.
-          $book_id = $this->service->getBookIdFormat($this->book_entity->get('field_book_isbn')->getString(), $values['book_id_' . $delta]);
-          $book_item->set('field_book_item_id', $book_id);
-          $book_item->set('title', $values['title'] . ' Book #' . $book_id);
+          $book_item->set('field_book_item_id', $values['book_id_' . $delta]);
+          $book_item->set('title', $values['title'] . ' Book #' . $values['book_id_' . $delta]);
         }
-        // Update the condition and save the book node.
-        $book_item->set('field_book_item_condition', $values['condition_' . $delta]);
+        // Update book item fields and save the book node.
+        $book_item->set('field_book_item_condition', [['target_id' => $values['condition_' . $delta]]]);
+        $book_item->set('field_book_item_disallow', $values['disallow_' . $delta]);
         // And the book node to the book item.
         $book_item->field_book->target_id = $book_node->id();
         $book_item->status = 1;
+        // We want to save the note paragraphs.
+        if (!empty($this->book_item_note_deltas[$delta])) {
+          $book_notes = $book_item->get('field_book_item_notes')->getValue();
+          // Loop through all the book notes.
+          foreach ($this->book_item_note_deltas[$delta] as $note_id) {
+            // make new note paragraph if the value is not empty.
+            if (strpos($note_id, '_new') !== FALSE && !empty($values['note_' . $note_id . '_' . $delta])) {
+              // Make the book item notes paragraph content type.
+              $paragraph = Paragraph::create(['type' => 'book_item_notes']);
+              $paragraph->set('field_book_note', $values['note_' . $note_id . '_' . $delta]);
+              $paragraph->set('field_book_note_date', date('Y-m-d\TH:i:s', REQUEST_TIME));
+              $paragraph->isNew();
+              $paragraph->save();
+              $book_notes[] = [
+                'target_id' => $paragraph->id(),
+                'target_revision_id' => $paragraph->getRevisionId()
+              ];
+            }
+          }
+          // If the notes are not empty
+          // add them to the book item.
+          if (!empty($book_notes)) {
+            $book_item->set('field_book_item_notes', $book_notes);
+          }
+        }
+        // Save the book item.
         $book_item->save();
         // Only add the book delta if it isnt already set.
         if (!in_array($book_item->id(), $this->getBookItemDeltas())) {
@@ -498,10 +680,18 @@ class BookForm extends FormBase {
       }
       // Resave the bok node.
       $book_node->save();
-      // Link to the edit book page.
-      $book_link = Link::fromTextAndUrl(t($values['title']), Url::fromUserInput('/book-management/edit-book/' . $book_node->id()))->toString();
-      \Drupal::messenger()->addStatus(t("Book @link saved!\n", array('@link' => $book_link)));
-      $form_state->setRedirectUrl(Url::fromRoute('view.list_of_books.page_1'));
+      if (\Drupal::routeMatch()->getRouteName() == 'book_management.add_book') {
+        $message = $this->t("Book has been made!\n");
+        $url = Url::fromUserInput('/book-management/edit-book/' . $book_node->id());
+      }
+      else {
+        // Link to the edit book page.
+        $book_link = Link::fromTextAndUrl(t($values['title']), Url::fromUserInput('/book-management/edit-book/' . $book_node->id()))->toString();
+        $message = $this->t("Book @link saved!\n", array('@link' => $book_link));
+        $url = Url::fromRoute('view.list_of_books.page_1');
+      }
+      \Drupal::messenger()->addStatus($message);
+      $form_state->setRedirectUrl($url);
     }
     catch (\Exception $e) {
       \Drupal::logger('book_management')->error($e->getMessage());

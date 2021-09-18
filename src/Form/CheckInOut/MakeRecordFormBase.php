@@ -12,6 +12,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Database\Connection;
+use Drupal\paragraphs\Entity\Paragraph;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 abstract class MakeRecordFormBase extends FormBase {
@@ -83,16 +84,19 @@ abstract class MakeRecordFormBase extends FormBase {
    */
   protected function saveData() {
     try {
+      // Used to retrieve the CMS info.
+      $condition = \Drupal::service('book_management.services')->getTaxonomyNameFromId('conditions', $this->store->get('condition'));
       // Make a record in the records table to log transaction.
       // Load the transaction record if it is set.
       if ($active_record = $this->store->get('active_record')) {
         $result = $this->connection->update('book_management_transaction_records')
           ->fields([
-            'check_in_condition' => $this->store->get('condition'),
+            'check_in_condition' => $condition,
             'check_in_date' => REQUEST_TIME,
           ])
           ->condition('rid', $active_record , '=')
           ->execute();
+        $rid = $active_record;
         // Reset the active record
         // to zero for the Book Node.
         $active_record = 0;
@@ -103,7 +107,7 @@ abstract class MakeRecordFormBase extends FormBase {
             'admin_id' => $this->currentUser->id(),
             'student_id' => $this->store->get('student'),
             'book_nid' => $this->store->get('node_id'),
-            'check_out_condition' => $this->store->get('condition'),
+            'check_out_condition' => $condition,
             'check_out_date' => REQUEST_TIME,
             'check_in_condition' => NULL,
             'check_in_date' => NULL,
@@ -111,11 +115,28 @@ abstract class MakeRecordFormBase extends FormBase {
           ->execute();
         // Save the Record ID to the Node.
         $active_record = $result;
+        $rid = $active_record;
       }
       // Update the book item check status to "Checked Out".
       $book_item_entity = \Drupal::entityTypeManager()->getStorage('node')->load($this->store->get('node_id'));
       $book_item_entity->set('field_book_item_active_record', $active_record);
-      $book_item_entity->set('field_book_item_condition',  $this->store->get('condition'));
+      $book_item_entity->set('field_book_item_condition', [['target_id' => $this->store->get('condition')]]);
+      // make new note paragraph if the value is not empty.
+      if (!empty($this->store->get('note'))) {
+        $book_notes = $book_item_entity->get('field_book_item_notes')->getValue();
+        // Make the book item notes paragraph content type.
+        $paragraph = Paragraph::create(['type' => 'book_item_notes']);
+        $paragraph->set('field_book_note_record_id', $rid);
+        $paragraph->set('field_book_note', $this->store->get('note'));
+        $paragraph->set('field_book_note_date', date('Y-m-d\TH:i:s', REQUEST_TIME));
+        $paragraph->isNew();
+        $paragraph->save();
+        $book_notes[] = [
+          'target_id' => $paragraph->id(),
+          'target_revision_id' => $paragraph->getRevisionId()
+        ];
+        $book_item_entity->set('field_book_item_notes', $book_notes);
+      }
       $book_item_entity->save();
 
       $this->deleteStore();

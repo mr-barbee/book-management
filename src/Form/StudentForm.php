@@ -33,7 +33,7 @@ class StudentForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $uid = NULL) {
     try {
-      $active_records = array();
+      $active_records = [];
       if (!empty($uid)) {
         $student = User::load($uid);
         if (!empty($student)) {
@@ -41,42 +41,42 @@ class StudentForm extends FormBase {
           $active_records = $this->service->getStudentTransactionRecords($uid, TRUE);
         }
       }
-      $form['name'] = array (
+      $form['name'] = [
        '#type' => 'textfield',
        '#title' => t('Name:'),
        '#required' => TRUE,
        '#default_value' => isset($student) ? $student->get('field_student_name')->getString() : NULL,
-      );
-      $form['grade'] = array (
+     ];
+      $form['grade'] = [
        '#type' => 'select',
        '#title' => t('Grade'),
-       '#options' => $this->service->getGrade(),
+       '#options' => $this->service->getTaxonomyIdFromVid('grade'),
        '#required' => TRUE,
        '#default_value' => isset($student) ? $student->get('field_student_grade')->getString(): NULL,
-      );
+     ];
 
-      $form['book_item'] = array(
+      $form['book_item'] = [
         '#type' => 'container',
-        '#attributes' => array('id' => 'book-items'),
+        '#attributes' => ['id' => 'book-items'],
         '#prefix' => '<div class="book-items"><h4>Actively Checked Out Books:</h4>',
         '#suffix' => '</div>',
-      );
+      ];
 
       foreach ($active_records as $rid => $active_record) {
         $book_item_entity = \Drupal::entityTypeManager()->getStorage('node')->load($active_record['book']);
 
         if (isset($book_item_entity)) {
-          $form['book_item']['container_' . $rid] = array(
+          $form['book_item']['container_' . $rid] = [
             '#prefix' => '<div class="row">',
             '#suffix' => '</div>',
-          );
+          ];
           // Gather a list of links for the page.
           $link = Link::fromTextAndUrl($book_item_entity->get('title')->getString(), Url::fromUserInput('/book-management/search-records/' . $book_item_entity->get('field_book_item_active_record')->getString()))->toString();
-          $form['book_item']['container_' . $rid]['book_id_label' . $rid] = array(
+          $form['book_item']['container_' . $rid]['book_id_label' . $rid] = [
            '#markup' => '<div><a<h5>' . $link . '</h5></div>',
            '#prefix' => '<div class="col-md-12">',
            '#suffix' => '</div>',
-          );
+          ];
         }
       }
 
@@ -87,18 +87,18 @@ class StudentForm extends FormBase {
     }
 
     $form['actions']['#type'] = 'actions';
-    $form['actions']['submit'] = array(
+    $form['actions']['submit'] = [
      '#type' => 'submit',
      '#value' => $this->t('Save'),
      '#button_type' => 'primary',
-    );
-    $form['actions']['cancel'] = array(
+   ];
+    $form['actions']['cancel'] = [
      '#type' => 'submit',
      '#value' => $this->t('Cancel'),
      '#button_type' => 'secondary',
-     '#limit_validation_errors' => array(),
-     '#submit' => array('::CancelStudent'),
-    );
+     '#limit_validation_errors' => [],
+     '#submit' => ['::CancelStudent'],
+   ];
     return $form;
   }
 
@@ -124,6 +124,7 @@ class StudentForm extends FormBase {
         $student = User::create();
         $language = \Drupal::languageManager()->getCurrentLanguage()->getId();
         // Mandatory settings not used currently.
+        // @TODO Maybe give students access to login.
         $student->setPassword('T!es$tud3nT8437');
         $student->enforceIsNew();
         $student->addRole('student');
@@ -138,7 +139,7 @@ class StudentForm extends FormBase {
       $student->setEmail($email_name . '@' . \Drupal::request()->getHost());
       $student->setUsername($email_name . REQUEST_TIME);
       $student->set('field_student_name', $values['name']);
-      $student->set('field_student_grade', $values['grade']);
+      $student->set('field_student_grade', [['target_id' => $values['grade']]]);
       // Save user
       if ($student->save()) {
         \Drupal::messenger()->addStatus(t("Ther Student saved successfully!\n"));

@@ -1,0 +1,24 @@
+<div class="container">
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key, note in book_item_notes %}
+        {% if key matches '/^\\d+$/' %}
+          <tr>
+            {% if note.note %}
+              <th scope="row">
+                {{ note.note }}
+              </th>
+              <th>{{ note.date }}</th>
+            {% endif %}
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><strong>NOTE:</strong> If the note is attached to a record then the note will be a hyper link to the record.</p>
+</div>

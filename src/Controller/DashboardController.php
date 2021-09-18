@@ -25,9 +25,10 @@ class DashboardController extends ControllerBase {
    *   A simple renderable array.
    */
   public function mainDashboardCallback() {
-    $books = array();
-    $recent_checkout_books = array();
-    $students = array();
+    $books = [];
+    $recent_checkout_books = [];
+    $students = [];
+    $book_notes = [];
     $record_count = 10;
     try {
       // Deny any page caching on the current request.
@@ -38,27 +39,24 @@ class DashboardController extends ControllerBase {
       // Get recenlty checkout book records.
       $recent_checkout_books = $this->service->getActiveTransactionRecords();
       $first_ten_checkout_books = array_slice($recent_checkout_books, 0, $record_count, TRUE);
-      // Get a list of students.
-      $students = $this->service->getAllStudents();
-      $ten_students = array_slice($students, 0, $record_count, TRUE);
+      // Get a list of book notes.
+      $book_notes = $this->service->getAllBookNotes($record_count);
       // Collect all relevent info from the records.
       foreach ($first_ten_checkout_books as $rid => $recent_checkout_book) {
         // Load the content from the system.
         $teacher = User::load($recent_checkout_book['teacher']);
         $student = User::load($recent_checkout_book['student']);
         $book_item_entity = \Drupal::entityTypeManager()->getStorage('node')->load($recent_checkout_book['book']);
-        $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($book_item_entity->get('field_book')->getString());
+        if ($book_item_entity) {
+          $book_entity = \Drupal::entityTypeManager()->getStorage('node')->load($book_item_entity->get('field_book')->getString());
+          // Set up the edit book link for the transaction title.
+          $first_ten_checkout_books[$rid]['book'] = Link::fromTextAndUrl($book_item_entity->get('title')->getString(), Url::fromUserInput('/book-management/edit-book/' . $book_entity->id()))->toString();
+        }
         // Add the updated data back to the array.
         $first_ten_checkout_books[$rid]['student'] = $student->get('field_student_name')->getString();
         $first_ten_checkout_books[$rid]['teacher'] = $teacher->get('field_student_name')->getString();
         // Format the checkout date to be displayed.
-        $first_ten_checkout_books[$rid]['check_out_date'] = \Drupal::service('date.formatter')->format($recent_checkout_book['check_out_date'], 'custom', 'd/m/Y - H:s');
-        // Set up the edit book link for the transaction title.
-        $first_ten_checkout_books[$rid]['book'] = Link::fromTextAndUrl($book_item_entity->get('title')->getString(), Url::fromUserInput('/book-management/edit-book/' . $book_entity->id()))->toString();
-      }
-      // Set up all of the students and book urls.
-      foreach ($ten_students as $uid => $student) {
-        $ten_students[$uid]['name'] = Link::fromTextAndUrl($student['name'], Url::fromUserInput('/book-management/edit-student/' . $uid))->toString();
+        $first_ten_checkout_books[$rid]['check_out_date'] = \Drupal::service('date.formatter')->format($recent_checkout_book['check_out_date'], 'custom', 'm/d/Y - g:ia');
       }
       foreach ($first_ten_books as $nid => $book) {
         $first_ten_books[$nid]['title'] = Link::fromTextAndUrl($book['title'], Url::fromUserInput('/book-management/edit-book/' . $nid))->toString();
@@ -70,11 +68,10 @@ class DashboardController extends ControllerBase {
     $element = array(
       '#theme' => 'main_dashboard',
       '#book_count' => count($books),
-      '#books' => isset($first_ten_books) ? $first_ten_books : array(),
+      '#books' => isset($first_ten_books) ? $first_ten_books : [],
       '#checkout_books_count' => count($recent_checkout_books),
-      '#checkout_books' => isset($first_ten_checkout_books) ? $first_ten_checkout_books : array() ,
-      '#student_count' => count($students),
-      '#students' => isset($ten_students) ? $ten_students : array(),
+      '#checkout_books' => isset($first_ten_checkout_books) ? $first_ten_checkout_books : [],
+      '#book_notes' => $book_notes,
     );
     return $element;
   }
